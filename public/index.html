@@ -1,0 +1,627 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Доска</title>
+<style>
+  :root{
+    --ink:#1b2430;
+    --paper:#f6f1e6;
+    --paper-dim:#efe7d6;
+    --line: #d8cdb2;
+    --accent:#e0a13a;
+    --accent-dark:#b97e1f;
+    --danger:#b5493f;
+    --font-display: Georgia, 'Times New Roman', serif;
+    --font-body: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    background: var(--paper);
+    background-image:
+      radial-gradient(circle at 1px 1px, rgba(27,36,48,0.06) 1px, transparent 0);
+    background-size: 18px 18px;
+    color:var(--ink);
+    font-family:var(--font-body);
+    min-height:100vh;
+    padding-bottom:60px;
+  }
+
+  header{
+    padding: 28px 20px 20px;
+    text-align:center;
+    border-bottom: 2px solid var(--ink);
+    background: var(--paper);
+    position:sticky;
+    top:0;
+    z-index:5;
+  }
+  header h1{
+    font-family:var(--font-display);
+    font-size: 2rem;
+    margin:0 0 4px;
+    letter-spacing: -0.01em;
+  }
+  header p{
+    margin:0;
+    color:#5b5142;
+    font-size:0.92rem;
+  }
+
+  nav{
+    display:flex;
+    justify-content:center;
+    gap: 6px;
+    padding: 12px 16px 0;
+    max-width:640px;
+    margin:0 auto;
+  }
+  nav button{
+    flex:1;
+    border:none;
+    background:none;
+    font-family:var(--font-body);
+    font-size:0.95rem;
+    padding: 10px 8px;
+    cursor:pointer;
+    color:#7a7060;
+    border-bottom: 3px solid transparent;
+    transition: color .15s ease, border-color .15s ease;
+  }
+  nav button.active{
+    color: var(--ink);
+    border-bottom-color: var(--accent);
+    font-weight:600;
+  }
+
+  main{
+    max-width:640px;
+    margin: 20px auto 0;
+    padding: 0 16px;
+  }
+
+  .empty{
+    text-align:center;
+    padding: 60px 20px;
+    color:#8a8070;
+  }
+  .empty .mark{
+    font-family:var(--font-display);
+    font-size:2.4rem;
+    display:block;
+    margin-bottom:10px;
+  }
+
+  .post{
+    background: var(--paper);
+    border: 1px solid var(--line);
+    border-left: 3px solid var(--ink);
+    padding: 18px 18px 14px;
+    margin-bottom:16px;
+    position:relative;
+  }
+  .post .meta{
+    font-size:0.78rem;
+    color:#8a8070;
+    margin-bottom:8px;
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+  }
+  .post .text{
+    font-size:1rem;
+    line-height:1.5;
+    white-space:pre-wrap;
+    margin: 0 0 10px;
+  }
+  .post img, .post video{
+    width:100%;
+    border:1px solid var(--line);
+    display:block;
+    margin: 6px 0 12px;
+    max-height:480px;
+    object-fit:cover;
+  }
+
+  .reactions{
+    display:flex;
+    flex-wrap:wrap;
+    gap:6px;
+    margin-top: 8px;
+  }
+  .react-btn{
+    border:1px solid var(--line);
+    background: var(--paper-dim);
+    border-radius: 999px;
+    padding: 5px 11px;
+    font-size:0.92rem;
+    cursor:pointer;
+    display:flex;
+    align-items:center;
+    gap:5px;
+    transition: transform .1s ease, background .15s ease, border-color .15s ease;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .react-btn:active{ transform: scale(0.94); }
+  .react-btn.mine{
+    background: #fbe9c9;
+    border-color: var(--accent-dark);
+  }
+  .react-btn .count{
+    font-size:0.78rem;
+    color:#6b6252;
+    font-variant-numeric: tabular-nums;
+  }
+  .react-btn.mine .count{ color: var(--accent-dark); font-weight:600; }
+
+  .del-btn{
+    background:none;
+    border:none;
+    color:#b0a68f;
+    font-size:0.75rem;
+    cursor:pointer;
+    padding:2px 4px;
+  }
+  .del-btn:hover{ color: var(--danger); }
+
+  .admin-gate{
+    max-width:340px;
+    margin: 60px auto;
+    padding: 28px 24px;
+    background:var(--paper);
+    border:1px solid var(--line);
+    border-left:3px solid var(--ink);
+    text-align:center;
+  }
+  .admin-gate h2{
+    font-family:var(--font-display);
+    margin-top:0;
+  }
+  .admin-gate input{
+    width:100%;
+    padding:10px 12px;
+    font-size:1rem;
+    border:1px solid var(--line);
+    background:#fff;
+    margin: 14px 0;
+    font-family:var(--font-body);
+  }
+  .admin-gate .err{
+    color:var(--danger);
+    font-size:0.85rem;
+    min-height:1.2em;
+  }
+
+  .btn{
+    background: var(--ink);
+    color: var(--paper);
+    border:none;
+    padding: 11px 20px;
+    font-size:0.95rem;
+    cursor:pointer;
+    font-family:var(--font-body);
+    width:100%;
+  }
+  .btn:hover{ background:#000; }
+  .btn:disabled{ opacity:0.5; cursor:default; }
+
+  .composer{
+    background: var(--paper);
+    border: 1px solid var(--line);
+    border-left: 3px solid var(--accent-dark);
+    padding: 18px;
+    margin-bottom: 24px;
+  }
+  .composer h2{
+    font-family:var(--font-display);
+    font-size:1.2rem;
+    margin: 0 0 12px;
+  }
+  .composer textarea{
+    width:100%;
+    min-height:90px;
+    padding: 10px 12px;
+    font-family:var(--font-body);
+    font-size:1rem;
+    border:1px solid var(--line);
+    resize:vertical;
+    background:#fff;
+  }
+  .composer .attach-row{
+    display:flex;
+    gap:8px;
+    margin: 12px 0;
+    flex-wrap:wrap;
+  }
+  .attach-btn{
+    border:1px solid var(--line);
+    background: var(--paper-dim);
+    padding: 8px 14px;
+    font-size:0.88rem;
+    cursor:pointer;
+  }
+  .preview{
+    margin: 10px 0;
+    position:relative;
+  }
+  .preview img, .preview video{
+    max-width:100%;
+    max-height:280px;
+    border:1px solid var(--line);
+    display:block;
+  }
+  .preview .clear{
+    position:absolute;
+    top:6px; right:6px;
+    background: rgba(27,36,48,0.85);
+    color:#fff;
+    border:none;
+    width:26px; height:26px;
+    border-radius:50%;
+    cursor:pointer;
+    font-size:1rem;
+    line-height:1;
+  }
+  .logout-row{
+    text-align:center;
+    margin-top: -8px;
+    margin-bottom: 18px;
+  }
+  .logout-row button{
+    background:none;
+    border:none;
+    color:#8a8070;
+    font-size:0.82rem;
+    cursor:pointer;
+    text-decoration:underline;
+  }
+  .status{
+    text-align:center;
+    color:#8a8070;
+    font-size:0.85rem;
+    padding: 40px 0;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Доска</h1>
+  <p>Объявления и новости — реагируйте эмодзи</p>
+</header>
+
+<nav>
+  <button id="tab-feed" class="active">Лента</button>
+  <button id="tab-admin">Админ</button>
+</nav>
+
+<main id="app">
+  <div class="status">Загрузка…</div>
+</main>
+
+<script>
+// Поменяй на адрес своего сервера на Render после деплоя,
+// например: https://board-server.onrender.com
+const API_BASE = window.location.origin;
+
+const REACTIONS = ['👍','❤️','😂','😮','😢','🔥'];
+
+let state = {
+  view: 'feed',
+  isAdmin: sessionStorage.getItem('board_admin') === '1',
+  adminPassword: sessionStorage.getItem('board_admin_pass') || '',
+  posts: [],
+  myReactions: {},
+  composerText: '',
+  composerFile: null, // File object
+  composerPreviewUrl: null,
+};
+
+function uid(){
+  return Date.now().toString(36) + Math.random().toString(36).slice(2,8);
+}
+function getVisitorId(){
+  let id = localStorage.getItem('board_visitor_id');
+  if(!id){
+    id = uid();
+    localStorage.setItem('board_visitor_id', id);
+  }
+  return id;
+}
+const VISITOR_ID = getVisitorId();
+
+function fmtDate(ts){
+  const d = new Date(ts);
+  return d.toLocaleString('ru-RU', {day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit'});
+}
+function escapeHtml(s){
+  const div = document.createElement('div');
+  div.textContent = s;
+  return div.innerHTML;
+}
+function escapeAttr(s){
+  return String(s).replace(/"/g,'&quot;');
+}
+
+async function apiGet(path, headers = {}) {
+  const res = await fetch(API_BASE + path, { headers });
+  if (!res.ok) throw new Error((await res.json().catch(()=>({}))).error || 'Ошибка запроса');
+  return res.json();
+}
+async function apiPost(path, body, headers = {}) {
+  const res = await fetch(API_BASE + path, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...headers },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) throw new Error((await res.json().catch(()=>({}))).error || 'Ошибка запроса');
+  return res.json();
+}
+
+async function loadFeed(){
+  const data = await apiGet('/api/posts', { 'x-visitor-id': VISITOR_ID });
+  state.posts = data.posts;
+  state.myReactions = data.myReactions || {};
+}
+
+function render(){
+  const app = document.getElementById('app');
+  document.getElementById('tab-feed').classList.toggle('active', state.view==='feed');
+  document.getElementById('tab-admin').classList.toggle('active', state.view==='admin');
+
+  if(state.view === 'feed'){
+    renderFeed(app);
+  } else {
+    renderAdmin(app);
+  }
+}
+
+function renderFeed(app){
+  if(state.posts.length === 0){
+    app.innerHTML = `<div class="empty"><span class="mark">✎</span>Пока пусто.<br>Загляните позже.</div>`;
+    return;
+  }
+  app.innerHTML = state.posts.map(post => renderPost(post)).join('');
+
+  state.posts.forEach(post => {
+    REACTIONS.forEach(emoji => {
+      const btn = app.querySelector(`[data-react-btn="${post.id}-${escapeAttr(emoji)}"]`);
+      if(btn) btn.addEventListener('click', () => toggleReaction(post.id, emoji));
+    });
+    if(state.isAdmin){
+      const del = app.querySelector(`[data-del="${post.id}"]`);
+      if(del) del.addEventListener('click', () => deletePost(post.id));
+    }
+  });
+}
+
+function renderPost(post){
+  const mine = state.myReactions[post.id] || [];
+  const reactionsHtml = REACTIONS.map(emoji => {
+    const count = (post.reactions && post.reactions[emoji]) || 0;
+    const isMine = mine.includes(emoji);
+    if(count === 0 && !isMine) {
+      return `<button class="react-btn" data-react-btn="${escapeAttr(post.id)}-${escapeAttr(emoji)}">${emoji}</button>`;
+    }
+    return `<button class="react-btn ${isMine?'mine':''}" data-react-btn="${escapeAttr(post.id)}-${escapeAttr(emoji)}">${emoji}<span class="count">${count}</span></button>`;
+  }).join('');
+
+  let mediaHtml = '';
+  if(post.media){
+    if(post.media.type === 'image'){
+      mediaHtml = `<img src="${post.media.url}" alt="" loading="lazy">`;
+    } else if(post.media.type === 'video'){
+      mediaHtml = `<video src="${post.media.url}" controls playsinline preload="metadata"></video>`;
+    }
+  }
+
+  const delHtml = state.isAdmin ? `<button class="del-btn" data-del="${escapeAttr(post.id)}">Удалить</button>` : '';
+
+  return `
+    <div class="post">
+      <div class="meta"><span>${fmtDate(post.createdAt)}</span>${delHtml}</div>
+      ${post.text ? `<p class="text">${escapeHtml(post.text)}</p>` : ''}
+      ${mediaHtml}
+      <div class="reactions">${reactionsHtml}</div>
+    </div>
+  `;
+}
+
+async function toggleReaction(postId, emoji){
+  const post = state.posts.find(p => p.id === postId);
+  if(!post) return;
+  if(!post.reactions) post.reactions = {};
+  if(!state.myReactions[postId]) state.myReactions[postId] = [];
+
+  const already = state.myReactions[postId].includes(emoji);
+  // optimistic update
+  if(already){
+    post.reactions[emoji] = Math.max(0, (post.reactions[emoji]||0) - 1);
+    state.myReactions[postId] = state.myReactions[postId].filter(e => e !== emoji);
+  } else {
+    post.reactions[emoji] = (post.reactions[emoji]||0) + 1;
+    state.myReactions[postId].push(emoji);
+  }
+  render();
+
+  try {
+    await apiPost(`/api/posts/${postId}/react`, { emoji, visitorId: VISITOR_ID });
+  } catch(e) {
+    console.error(e);
+    await loadFeed();
+    render();
+  }
+}
+
+async function deletePost(postId){
+  if(!confirm('Удалить это сообщение?')) return;
+  try {
+    const res = await fetch(`${API_BASE}/api/posts/${postId}`, {
+      method: 'DELETE',
+      headers: { 'x-admin-password': state.adminPassword },
+    });
+    if(!res.ok) throw new Error('Ошибка удаления');
+    state.posts = state.posts.filter(p => p.id !== postId);
+    render();
+  } catch(e) {
+    alert('Не удалось удалить: ' + e.message);
+  }
+}
+
+function renderAdmin(app){
+  if(!state.isAdmin){
+    app.innerHTML = `
+      <div class="admin-gate">
+        <h2>Вход</h2>
+        <p style="color:#8a8070;font-size:0.9rem;margin:0;">Введите пароль администратора</p>
+        <input type="password" id="admin-pass" placeholder="Пароль" autocomplete="current-password">
+        <div class="err" id="admin-err"></div>
+        <button class="btn" id="admin-login">Войти</button>
+      </div>
+    `;
+    const input = document.getElementById('admin-pass');
+    const doLogin = async () => {
+      const btn = document.getElementById('admin-login');
+      btn.disabled = true;
+      try {
+        await apiPost('/api/admin/login', { password: input.value });
+        state.isAdmin = true;
+        state.adminPassword = input.value;
+        sessionStorage.setItem('board_admin', '1');
+        sessionStorage.setItem('board_admin_pass', input.value);
+        render();
+      } catch(e) {
+        document.getElementById('admin-err').textContent = 'Неверный пароль';
+        btn.disabled = false;
+      }
+    };
+    document.getElementById('admin-login').addEventListener('click', doLogin);
+    input.addEventListener('keydown', e => { if(e.key === 'Enter') doLogin(); });
+    input.focus();
+    return;
+  }
+
+  const mediaPreview = state.composerPreviewUrl ? `
+    <div class="preview">
+      ${state.composerFile.type.startsWith('video')
+        ? `<video src="${state.composerPreviewUrl}" controls></video>`
+        : `<img src="${state.composerPreviewUrl}">`}
+      <button class="clear" id="clear-media">✕</button>
+    </div>` : '';
+
+  app.innerHTML = `
+    <div class="logout-row"><button id="logout">Выйти из админки</button></div>
+    <div class="composer">
+      <h2>Новое сообщение</h2>
+      <textarea id="composer-text" placeholder="Что хотите сообщить?">${escapeHtml(state.composerText)}</textarea>
+      <div class="attach-row">
+        <button class="attach-btn" id="pick-photo">📷 Фото</button>
+        <button class="attach-btn" id="pick-video">🎥 Видео</button>
+        <input type="file" id="file-photo" accept="image/*" style="display:none">
+        <input type="file" id="file-video" accept="video/*" style="display:none">
+      </div>
+      ${mediaPreview}
+      <button class="btn" id="publish-btn">Опубликовать</button>
+      <div class="err" id="publish-err"></div>
+    </div>
+  `;
+
+  document.getElementById('logout').addEventListener('click', () => {
+    state.isAdmin = false;
+    sessionStorage.removeItem('board_admin');
+    sessionStorage.removeItem('board_admin_pass');
+    state.view = 'feed';
+    render();
+  });
+
+  const textarea = document.getElementById('composer-text');
+  textarea.addEventListener('input', () => { state.composerText = textarea.value; });
+
+  document.getElementById('pick-photo').addEventListener('click', () => document.getElementById('file-photo').click());
+  document.getElementById('pick-video').addEventListener('click', () => document.getElementById('file-video').click());
+  document.getElementById('file-photo').addEventListener('change', handleFile);
+  document.getElementById('file-video').addEventListener('change', handleFile);
+
+  const clearBtn = document.getElementById('clear-media');
+  if(clearBtn) clearBtn.addEventListener('click', () => {
+    state.composerFile = null;
+    state.composerPreviewUrl = null;
+    render();
+  });
+
+  document.getElementById('publish-btn').addEventListener('click', publishPost);
+}
+
+function handleFile(e){
+  const file = e.target.files[0];
+  if(!file) return;
+  state.composerFile = file;
+  state.composerPreviewUrl = URL.createObjectURL(file);
+  render();
+}
+
+async function publishPost(){
+  const text = state.composerText.trim();
+  if(!text && !state.composerFile){
+    document.getElementById('publish-err').textContent = 'Добавьте текст или медиа';
+    return;
+  }
+  const btn = document.getElementById('publish-btn');
+  btn.disabled = true;
+  btn.textContent = 'Публикация…';
+
+  try {
+    const formData = new FormData();
+    formData.append('text', text);
+    if(state.composerFile) formData.append('media', state.composerFile);
+
+    const res = await fetch(`${API_BASE}/api/posts`, {
+      method: 'POST',
+      headers: { 'x-admin-password': state.adminPassword },
+      body: formData,
+    });
+    if(!res.ok) {
+      const err = await res.json().catch(()=>({}));
+      throw new Error(err.error || 'Ошибка публикации');
+    }
+
+    state.composerText = '';
+    state.composerFile = null;
+    state.composerPreviewUrl = null;
+    state.view = 'feed';
+    await loadFeed();
+    render();
+  } catch(e) {
+    document.getElementById('publish-err').textContent = e.message;
+    btn.disabled = false;
+    btn.textContent = 'Опубликовать';
+  }
+}
+
+document.getElementById('tab-feed').addEventListener('click', async () => {
+  state.view = 'feed';
+  render();
+  try { await loadFeed(); render(); } catch(e) {}
+});
+document.getElementById('tab-admin').addEventListener('click', () => { state.view = 'admin'; render(); });
+
+async function init(){
+  try {
+    await loadFeed();
+  } catch(e) {
+    console.error(e);
+  }
+  render();
+}
+init();
+
+// Держим себя "тёплыми" изнутри вкладки браузера тоже (доп. подстраховка)
+setInterval(() => {
+  fetch(API_BASE + '/api/ping').catch(()=>{});
+}, 4 * 60 * 1000);
+</script>
+
+</body>
+</html>

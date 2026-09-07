@@ -4,17 +4,17 @@
 Стек:
 - FastAPI (веб-сервер и API)
 - Turso / libsql (база данных постов и реакций)
-- Cloudflare R2 через boto3 (хранилище фото/видео, S3-совместимое)
+- Локальное хранилище файлов (папка uploads/ на диске сервера)
+
+⚠️ На бесплатном тарифе Render диск не постоянный: файлы могут пропасть
+при перезапуске/передеплое сервиса. Посты и реакции (в Turso) при этом
+не пострадают — пропадут только сами картинки/видео. Если это станет
+проблемой, можно подключить внешнее хранилище (Cloudflare R2, Backblaze B2 и т.п.)
 
 Переменные окружения (задаются в Render → Environment):
     ADMIN_PASSWORD          пароль для входа в админку
     TURSO_DATABASE_URL      напр. libsql://board-db-xxx.turso.io
     TURSO_AUTH_TOKEN        токен доступа к Turso
-    R2_ACCOUNT_ID           Account ID в Cloudflare
-    R2_ACCESS_KEY_ID        ключ доступа R2
-    R2_SECRET_ACCESS_KEY    секретный ключ R2
-    R2_BUCKET_NAME          имя бакета, напр. board-media
-    R2_PUBLIC_URL           публичный URL бакета, напр. https://pub-xxxx.r2.dev
     PORT                    порт (Render подставляет сам)
 """
 
@@ -24,7 +24,6 @@ import uuid
 import mimetypes
 from typing import Optional
 
-import boto3
 from fastapi import FastAPI, UploadFile, File, Form, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
@@ -41,29 +40,19 @@ ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "admin123")
 TURSO_DATABASE_URL = os.environ.get("TURSO_DATABASE_URL", "")
 TURSO_AUTH_TOKEN = os.environ.get("TURSO_AUTH_TOKEN", "")
 
-R2_ACCOUNT_ID = os.environ.get("R2_ACCOUNT_ID", "")
-R2_ACCESS_KEY_ID = os.environ.get("R2_ACCESS_KEY_ID", "")
-R2_SECRET_ACCESS_KEY = os.environ.get("R2_SECRET_ACCESS_KEY", "")
-R2_BUCKET_NAME = os.environ.get("R2_BUCKET_NAME", "")
-R2_PUBLIC_URL = os.environ.get("R2_PUBLIC_URL", "").rstrip("/")
-
 MAX_FILE_SIZE = 100 * 1024 * 1024  # 100 МБ
 
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+UPLOADS_DIR = os.path.join(BASE_DIR, "uploads")
+os.makedirs(UPLOADS_DIR, exist_ok=True)
+
 # ---------------------------------------------------------------------------
-# Клиенты: база данных (Turso) и файловое хранилище (Cloudflare R2)
+# Клиент базы данных (Turso)
 # ---------------------------------------------------------------------------
 
 db = libsql_client.create_client_sync(
     url=TURSO_DATABASE_URL,
     auth_token=TURSO_AUTH_TOKEN,
-)
-
-s3 = boto3.client(
-    "s3",
-    endpoint_url=f"https://{R2_ACCOUNT_ID}.r2.cloudflarestorage.com",
-    aws_access_key_id=R2_ACCESS_KEY_ID,
-    aws_secret_access_key=R2_SECRET_ACCESS_KEY,
-    region_name="auto",
 )
 
 
@@ -87,26 +76,26 @@ def init_db():
     """)
 
 
-def upload_to_r2(content: bytes, content_type: str, original_name: str) -> str:
+def save_file_locally(content: bytes, original_name: str) -> str:
+    """Сохраняет файл в папку uploads/ и возвращает относительный URL для доступа."""
     ext = (original_name.rsplit(".", 1)[-1] if "." in original_name else "bin").lower()
-    key = f"{int(time.time())}-{uuid.uuid4().hex[:8]}.{ext}"
-    s3.put_object(
-        Bucket=R2_BUCKET_NAME,
-        Key=key,
-        Body=content,
-        ContentType=content_type or "application/octet-stream",
-    )
-    return f"{R2_PUBLIC_URL}/{key}"
+    filename = f"{int(time.time())}-{uuid.uuid4().hex[:8]}.{ext}"
+    filepath = os.path.join(UPLOADS_DIR, filename)
+    with open(filepath, "wb") as f:
+        f.write(content)
+    return f"/uploads/{filename}"
 
 
-def delete_from_r2(url: Optional[str]):
-    if not url or not url.startswith(R2_PUBLIC_URL):
+def delete_file_locally(url: Optional[str]):
+    if not url or not url.startswith("/uploads/"):
         return
-    key = url[len(R2_PUBLIC_URL) + 1:]
+    filename = url[len("/uploads/"):]
+    filepath = os.path.join(UPLOADS_DIR, filename)
     try:
-        s3.delete_object(Bucket=R2_BUCKET_NAME, Key=key)
+        if os.path.exists(filepath):
+            os.remove(filepath)
     except Exception as e:
-        print(f"Не удалось удалить файл из R2: {e}")
+        print(f"Не удалось удалить файл: {e}")
 
 
 # ---------------------------------------------------------------------------
@@ -198,7 +187,7 @@ async def create_post(
 
         guessed_type = media.content_type or mimetypes.guess_type(media.filename or "")[0] or ""
         media_type = "video" if guessed_type.startswith("video") else "image"
-        media_url = upload_to_r2(content, guessed_type, media.filename or "file")
+        media_url = save_file_locally(content, media.filename or "file")
 
     if not text and not media_url:
         raise HTTPException(status_code=400, detail="Нужен текст или медиа")
@@ -226,7 +215,7 @@ def delete_post(post_id: str, x_admin_password: Optional[str] = Header(None)):
 
     result = db.execute("SELECT media_url FROM posts WHERE id = ?", [post_id])
     if result.rows:
-        delete_from_r2(result.rows[0][0])
+        delete_file_locally(result.rows[0][0])
 
     db.execute("DELETE FROM posts WHERE id = ?", [post_id])
     db.execute("DELETE FROM reactions WHERE post_id = ?", [post_id])
@@ -259,10 +248,12 @@ def react_to_post(post_id: str, body: ReactBody):
 
 
 # ---------------------------------------------------------------------------
-# Отдача фронтенда (папка public/) — сначала API-роуты выше, потом статика
+# Отдача загруженных файлов и фронтенда
 # ---------------------------------------------------------------------------
 
-PUBLIC_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "public")
+PUBLIC_DIR = os.path.join(BASE_DIR, "public")
+
+app.mount("/uploads", StaticFiles(directory=UPLOADS_DIR), name="uploads")
 
 
 @app.get("/")

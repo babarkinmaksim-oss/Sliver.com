@@ -40,6 +40,12 @@ ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "admin123")
 TURSO_DATABASE_URL = os.environ.get("TURSO_DATABASE_URL", "")
 TURSO_AUTH_TOKEN = os.environ.get("TURSO_AUTH_TOKEN", "")
 
+# libsql_client поддерживает и libsql://, и https:// — используем https,
+# он работает по обычным HTTP-запросам и не требует WebSocket-соединения,
+# что обходит некоторые проблемы совместимости с серверным окружением Render.
+if TURSO_DATABASE_URL.startswith("libsql://"):
+    TURSO_DATABASE_URL = "https://" + TURSO_DATABASE_URL[len("libsql://"):]
+
 MAX_FILE_SIZE = 100 * 1024 * 1024  # 100 МБ
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
